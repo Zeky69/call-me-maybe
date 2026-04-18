@@ -3,7 +3,8 @@ import os
 from .logger import logger
 from .models import FunctionCall
 
-def save_results(file_path:str, results:list[FunctionCall]):
+
+def save_results(file_path: str, results: list[FunctionCall]) -> None:
     try:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 

@@ -3,3 +3,8 @@
 *.lock
 *.pdf
 moulinette
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+data/output/

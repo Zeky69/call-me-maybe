@@ -1,8 +1,10 @@
 from pydantic import BaseModel
 from typing import Any
 
+
 class ParameterDef(BaseModel):
     type: str
+
 
 class FunctionDef(BaseModel):
     name: str
@@ -12,6 +14,6 @@ class FunctionDef(BaseModel):
 
 
 class FunctionCall(BaseModel):
-    prompt : str
-    name : str
-    parameters : dict[str, Any]
+    prompt: str
+    name: str
+    parameters: dict[str, Any]

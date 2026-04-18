@@ -1,7 +1,8 @@
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
 from .vocabulary import Vocabulary
 import numpy as np
 import re
+import json
 
 
 class ConstrainedDecoder:
@@ -12,15 +13,24 @@ class ConstrainedDecoder:
     def __init__(self, model: Small_LLM_Model, vocab: Vocabulary):
         self.model: Small_LLM_Model = model
         self.vocab: Vocabulary = vocab
-        self._vocab_items = list(vocab.get_tokens().items())  # [(id, str), ...]
+        self._vocab_items = list(
+            vocab.get_tokens().items())  # [(id, str), ...]
 
-        # Precompute numeric token ids as a sorted numpy array for fast indexing
+        # Precompute numeric token ids as a sorted numpy array for fast
+        # indexing
         self._number_token_ids = np.array(
-            [t_id for t_id, t_str in self._vocab_items if t_str and self._NUMBER_RE.fullmatch(t_str)],
+            [
+                t_id for t_id, t_str in self._vocab_items
+                if t_str and self._NUMBER_RE.fullmatch(t_str)
+            ],
             dtype=np.int64,
         )
 
-    def generate_one_of(self, input_ids: list[int], candidates: list[str], max_tokens: int = None) -> str:
+    def generate_one_of(
+            self,
+            input_ids: list[int],
+            candidates: list[str],
+            max_tokens: int | None = None) -> str:
         output: str = ""
         currend_input_ids = list(input_ids)
         total_tokens = 0
@@ -35,7 +45,8 @@ class ConstrainedDecoder:
             logits_np = np.array(logits, dtype=np.float32)
 
             # Build constrained logits: start with all NEG, allow valid tokens
-            logits_constrained = np.full(len(logits_np), self.NEG, dtype=np.float32)
+            logits_constrained = np.full(
+                len(logits_np), self.NEG, dtype=np.float32)
             for t_id, t_str in self._vocab_items:
                 if not t_str or t_id >= len(logits_np):
                     continue
@@ -56,7 +67,10 @@ class ConstrainedDecoder:
 
         return output
 
-    def generate_number(self, input_ids: list[int], max_tokens: int = None) -> float:
+    def generate_number(
+            self,
+            input_ids: list[int],
+            max_tokens: int | None = None) -> float:
         output: str = ""
         currend_input_ids = list(input_ids)
         total_tokens = 0
@@ -67,12 +81,16 @@ class ConstrainedDecoder:
             # Stop if the model's unconstrained best token is not numeric
             best_token_id = int(logits_np.argmax())
             best_token_str = self.vocab.get_string(best_token_id)
-            if not best_token_str or not self._NUMBER_RE.fullmatch(best_token_str):
+            if not best_token_str or not self._NUMBER_RE.fullmatch(
+                    best_token_str):
                 break
 
-            # Apply precomputed numeric token ids (safe regardless of logits size)
-            logits_constrained = np.full(len(logits_np), self.NEG, dtype=np.float32)
-            valid_ids = self._number_token_ids[self._number_token_ids < len(logits_np)]
+            # Apply precomputed numeric token ids (safe regardless of logits
+            # size)
+            logits_constrained = np.full(
+                len(logits_np), self.NEG, dtype=np.float32)
+            valid_ids = self._number_token_ids[self._number_token_ids < len(
+                logits_np)]
             logits_constrained[valid_ids] = logits_np[valid_ids]
 
             if np.all(logits_constrained == self.NEG):
@@ -90,15 +108,25 @@ class ConstrainedDecoder:
         except ValueError:
             return float('nan')
 
-    def generate_bool(self, input_ids: list[int], max_tokens: int = None) -> bool:
+    def generate_bool(
+            self,
+            input_ids: list[int],
+            max_tokens: int | None = None) -> bool:
         output = self.generate_one_of(input_ids, ["True", "False"], max_tokens)
         return output == "True"
 
-    def generate_integer(self, input_ids: list[int], max_tokens: int = None) -> int:
+    def generate_integer(
+            self,
+            input_ids: list[int],
+            max_tokens: int | None = None) -> int:
         output = self.generate_number(input_ids, max_tokens)
         return int(output)
 
-    def generate_string(self, input_ids: list[int], max_tokens: int = None, stop_char: str = '"') -> str:
+    def generate_string(
+            self,
+            input_ids: list[int],
+            max_tokens: int | None = None,
+            stop_char: str = '"') -> str:
         output: str = ""
         currend_input_ids = list(input_ids)
         total_tokens = 0
@@ -121,8 +149,7 @@ class ConstrainedDecoder:
             total_tokens += 1
             if max_tokens is not None and total_tokens >= max_tokens:
                 break
-        return output.strip()
-
-        
-      
-
+        try:
+            return str(json.loads(f'"{output}"'))
+        except (json.JSONDecodeError, ValueError):
+            return output
