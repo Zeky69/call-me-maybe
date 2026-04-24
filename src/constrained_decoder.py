@@ -122,34 +122,51 @@ class ConstrainedDecoder:
         output = self.generate_number(input_ids, max_tokens)
         return int(output)
 
+    def _find_unescaped_stop(self, output: str, token: str,
+                             stop_char: str) -> int | None:
+        combined = output + token
+        offset = len(output)
+        for i, ch in enumerate(token):
+            if ch == stop_char:
+                prefix = combined[:offset + i]
+                num_backslashes = len(prefix) - len(prefix.rstrip('\\'))
+                if num_backslashes % 2 == 0:
+                    return i
+        return None
+
+    def _decode_string(self, raw: str) -> str:
+        if raw.endswith('\\"') and not raw.endswith('\\\\"'):
+            raw = raw[:-2]
+        try:
+            return str(json.loads(f'"{raw}"')).strip()
+        except (json.JSONDecodeError, ValueError):
+            return raw.strip()
+
     def generate_string(
             self,
             input_ids: list[int],
             max_tokens: int | None = None,
             stop_char: str = '"') -> str:
-        output: str = ""
-        currend_input_ids = list(input_ids)
-        total_tokens = 0
-        while True:
-            logits = self.model.get_logits_from_input_ids(currend_input_ids)
-
+        output = ""
+        current_input_ids = list(input_ids)
+        limit = max_tokens if max_tokens is not None else 2**31
+        for _ in range(limit):
+            logits = self.model.get_logits_from_input_ids(current_input_ids)
             next_token_id = int(np.array(logits, dtype=np.float32).argmax())
             next_token = self.vocab.get_string(next_token_id)
             if next_token is None:
                 break
             if stop_char in next_token:
-                output += next_token.split(stop_char)[0]
-                break
-            if "\n" in next_token:
+                stop_idx = self._find_unescaped_stop(
+                    output, next_token, stop_char)
+                if stop_idx is not None:
+                    output += next_token[:stop_idx]
+                    break
+                output += next_token
+            elif "\n" in next_token:
                 output += next_token.split("\n")[0]
                 break
-            output += next_token
-
-            currend_input_ids.append(next_token_id)
-            total_tokens += 1
-            if max_tokens is not None and total_tokens >= max_tokens:
-                break
-        try:
-            return str(json.loads(f'"{output}"'))
-        except (json.JSONDecodeError, ValueError):
-            return output
+            else:
+                output += next_token
+            current_input_ids.append(next_token_id)
+        return self._decode_string(output)

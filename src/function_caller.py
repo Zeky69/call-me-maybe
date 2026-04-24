@@ -49,7 +49,15 @@ class FunctionCaller:
             prompt += f"- {name} ({p.type})\n"
         prompt += (
             "Respond with a JSON object containing the parameter values.\n"
+            "IMPORTANT: If the user message contains double quotes \"\", "
+            "keep them in the extracted string value using \\\".\n"
         )
+        if any(True for p in function_def.parameters.keys()
+                if "regex" in p.lower()):
+            prompt += "IMPORTANT: For replacement " \
+                "strings, always use the literal "
+            "symbol, never its English name: "
+            "asterisks → \"*\", hash → \"#\", dash → \"-\".\n"
         prompt += "<|im_end|>\n"
 
         prompt += f"<|im_start|>user\n{prompt_user}\n<|im_end|>\n"
@@ -107,9 +115,8 @@ class FunctionCaller:
                     input_ids, stop_char='"')
                 prompt_function += f'{param_value}"'
             else:
-                raise ValueError(
-                    f"Unsupported parameter type: {
-                        param_def.type}")
+                raise ValueError("Unsupported parameter type"
+                                 f": {param_def.type}")
             params[param_name] = param_value
             if i < len(param_items) - 1:
                 prompt_function += ', '

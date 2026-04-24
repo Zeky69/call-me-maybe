@@ -44,8 +44,8 @@ def main() -> None:
                 results.append(result)
             except Exception as e:
                 logger.error(
-                    f"An error occurred while processing prompt '{prompt}': {
-                        str(e)}")
+                    "An error occurred while "
+                    f"processing prompt '{prompt}': {str(e)}")
             finally:
                 pbar.set_postfix_str("")
     save_results(args.output, results)
